@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buzzebeesFetch } from "@/lib/buzzebees/client";
-import { STAMP_WALLET_BASE_URL } from "@/lib/buzzebees/config";
+import { stampWalletBaseUrl } from "@/lib/buzzebees/config";
 
 /**
  * Customer lookup against `GET /pos/profile?contactNumber=...`.
@@ -13,7 +13,7 @@ import { STAMP_WALLET_BASE_URL } from "@/lib/buzzebees/config";
 export async function fetchPosProfile(
   contactNumber: string,
 ): Promise<Record<string, unknown> | null> {
-  const url = new URL("/pos/profile", STAMP_WALLET_BASE_URL);
+  const url = new URL("/pos/profile", stampWalletBaseUrl());
   url.searchParams.set("contactNumber", contactNumber);
 
   const { status, json } = await buzzebeesFetch(url.toString(), {

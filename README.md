@@ -99,10 +99,7 @@ only the traced dependencies and runs as a non-root user.
 
 ```bash
 docker build -t crmplus-edit-member-level .
-docker run --rm -p 3000:3000 \
-  -e SESSION_SECRET="$(openssl rand -base64 48)" \
-  -e AUTH_USERS='somchai|Somchai J.|scrypt:...' \
-  crmplus-edit-member-level
+docker run --rm -p 3000:3000 --env-file .env.local crmplus-edit-member-level
 ```
 
 The server reads `PORT` and `HOSTNAME` at startup; the image defaults to
@@ -111,18 +108,27 @@ The server reads `PORT` and `HOSTNAME` at startup; the image defaults to
 ### Railway
 
 `railway.json` pins the Dockerfile builder and points the healthcheck at
-`/api/health`. Connect the repository and set two service variables:
+`/api/health`. Connect the repository and set the service variables from
+[`.env.example`](.env.example):
 
 | Variable | |
 | --- | --- |
 | `SESSION_SECRET` | Random, 32+ characters |
 | `AUTH_USERS` | Operator entries — see [Authentication](#authentication) |
+| `BUZZEBEES_APP_ID` | Merchant API app id |
+| `BUZZEBEES_USERNAME` | Merchant login |
+| `BUZZEBEES_PASSWORD` | Merchant password |
+| `BUZZEBEES_TERMINAL_ID` | Terminal id |
+| `BUZZEBEES_BRANCH_ID` | Branch id |
+| `BUZZEBEES_BRAND_ID` | Brand id |
 
-Neither is needed at build time: every route that reads them is rendered on
+None are needed at build time: every route that reads them is rendered on
 demand, so the image itself holds no secrets.
 
-`/api/health` is unauthenticated and returns 503 listing any missing variable,
-so a misconfigured deploy fails its healthcheck instead of coming up broken.
+`/api/health` is unauthenticated and returns 503 listing any missing app
+variable, so a misconfigured deploy fails its healthcheck instead of coming up
+broken. Missing Buzzebees variables are reported under `buzzebees.missing` but
+do not fail the probe, since the UI still reads the placeholder member store.
 
 ## Buzzebees integration
 
@@ -131,7 +137,7 @@ credential or token reaches the browser.
 
 | Module | Purpose |
 | --- | --- |
-| `config.ts` | Base URLs, `app-id`, merchant credentials |
+| `config.ts` | Reads credentials and base URLs from the environment |
 | `auth.ts` | `POST /merchant/login` (multipart), token cache, single-flight |
 | `client.ts` | Authorized fetch, retries once on 401 with a fresh token |
 | `profile.ts` | `GET /pos/profile?contactNumber=…` |
@@ -139,11 +145,14 @@ credential or token reaches the browser.
 The token is sent as `Authorization: token <access_token>` — the scheme is the
 literal word `token`, not `Bearer`.
 
-> **Credentials are hardcoded** in `src/lib/buzzebees/config.ts` by request.
-> They are visible to anyone with repository access and remain in git history
-> after removal, so rotate them if that ever stops being acceptable. Moving
-> them to `process.env.*` is a change to that one file; nothing else depends
-> on how they are sourced.
+Credentials come from the environment (see [Railway](#railway) for the list).
+Each is read lazily at the point of use, so `next build` and any route that
+does not call Buzzebees work without them; a missing one raises an error
+naming the variable.
+
+> **Rotate the credentials that were committed earlier.** An earlier revision
+> of this file carried them in plain text, and git history keeps them
+> reachable even though the current code does not.
 
 ### Verifying the connection
 

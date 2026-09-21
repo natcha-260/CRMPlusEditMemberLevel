@@ -1,35 +1,83 @@
 import "server-only";
 
 /**
- * Buzzebees API access.
+ * Buzzebees API access, sourced from the environment.
  *
- * SECURITY: these credentials are hardcoded by request. They are readable by
- * anyone with access to this repository and stay in git history even if they
- * are later removed, so treat them as compromised the moment they need
- * rotating. To move them out, replace the values below with `process.env.*`
- * reads and add the variables to `.env.local` / the deployment environment —
- * nothing else in the codebase has to change.
+ * Every value is read lazily rather than at module load, so `next build` — and
+ * any route that never talks to Buzzebees — works without them being set. A
+ * missing variable fails at the point of use with a message naming it.
  *
- * `server-only` keeps this module out of any client bundle, so the password is
- * never shipped to the browser.
+ * `server-only` keeps this module out of any client bundle, so nothing here
+ * reaches the browser.
  */
 
-/** Hosts `POST /merchant/login`. */
-export const MERCHANT_BASE_URL = "https://api1servicewallet.buzzebees.com";
+function required(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable ${name}. See .env.example.`,
+    );
+  }
+  return value;
+}
 
-/** Hosts `GET /pos/profile`. */
-export const STAMP_WALLET_BASE_URL = "https://stampwalletmodule.buzzebees.com";
+/** Non-secret endpoints: overridable to point at staging, production default. */
+export function merchantBaseUrl(): string {
+  return (
+    process.env.BUZZEBEES_MERCHANT_BASE_URL?.trim() ||
+    "https://api1servicewallet.buzzebees.com"
+  );
+}
 
-export const BUZZEBEES_APP_ID = "2377666859112635";
+export function stampWalletBaseUrl(): string {
+  return (
+    process.env.BUZZEBEES_STAMP_WALLET_BASE_URL?.trim() ||
+    "https://stampwalletmodule.buzzebees.com"
+  );
+}
+
+export function appId(): string {
+  return required("BUZZEBEES_APP_ID");
+}
+
+export type MerchantCredentials = {
+  username: string;
+  password: string;
+  terminalid: string;
+  branchid: string;
+  brandid: string;
+};
 
 /** Sent as multipart/form-data fields to `POST /merchant/login`. */
-export const MERCHANT_CREDENTIALS = {
-  username: "admin-buz",
-  password: "1234@Ssk",
-  terminalid: "0000001",
-  branchid: "344067",
-  brandid: "0077245",
-} as const;
+export function merchantCredentials(): MerchantCredentials {
+  return {
+    username: required("BUZZEBEES_USERNAME"),
+    password: required("BUZZEBEES_PASSWORD"),
+    terminalid: required("BUZZEBEES_TERMINAL_ID"),
+    branchid: required("BUZZEBEES_BRANCH_ID"),
+    brandid: required("BUZZEBEES_BRAND_ID"),
+  };
+}
 
-/** Field names whose values must never reach a log or an error message. */
-export const SECRET_FIELDS: readonly string[] = ["password"];
+/** Every variable the Buzzebees integration needs, for the health probe. */
+export const REQUIRED_BUZZEBEES_VARS = [
+  "BUZZEBEES_APP_ID",
+  "BUZZEBEES_USERNAME",
+  "BUZZEBEES_PASSWORD",
+  "BUZZEBEES_TERMINAL_ID",
+  "BUZZEBEES_BRANCH_ID",
+  "BUZZEBEES_BRAND_ID",
+] as const;
+
+export function missingBuzzebeesVars(): string[] {
+  return REQUIRED_BUZZEBEES_VARS.filter(
+    (name) => !process.env[name]?.trim(),
+  );
+}
+
+/** Credential values that must never reach a log or an error message. */
+export function secretValues(): string[] {
+  return [process.env.BUZZEBEES_PASSWORD?.trim()].filter(
+    (value): value is string => Boolean(value),
+  );
+}

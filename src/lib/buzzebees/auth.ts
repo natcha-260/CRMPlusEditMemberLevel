@@ -1,10 +1,10 @@
 import "server-only";
 
 import {
-  BUZZEBEES_APP_ID,
-  MERCHANT_BASE_URL,
-  MERCHANT_CREDENTIALS,
-  SECRET_FIELDS,
+  appId,
+  merchantBaseUrl,
+  merchantCredentials,
+  secretValues,
 } from "@/lib/buzzebees/config";
 
 /**
@@ -49,9 +49,8 @@ export class BuzzebeesAuthError extends Error {
 function redact(text: string): string {
   let output = text;
 
-  for (const field of SECRET_FIELDS) {
-    const value = MERCHANT_CREDENTIALS[field as keyof typeof MERCHANT_CREDENTIALS];
-    if (value) output = output.split(value).join("***");
+  for (const value of secretValues()) {
+    output = output.split(value).join("***");
   }
 
   return output;
@@ -78,18 +77,18 @@ function extractToken(payload: Record<string, unknown>): string | null {
  */
 export async function merchantLogin(): Promise<MerchantLogin> {
   const form = new FormData();
-  for (const [field, value] of Object.entries(MERCHANT_CREDENTIALS)) {
+  for (const [field, value] of Object.entries(merchantCredentials())) {
     form.append(field, value);
   }
 
   let response: Response;
   try {
-    response = await fetch(`${MERCHANT_BASE_URL}${LOGIN_PATH}`, {
+    response = await fetch(`${merchantBaseUrl()}${LOGIN_PATH}`, {
       method: "POST",
       // Content-Type is intentionally omitted: fetch derives it from the
       // FormData body along with the multipart boundary. Setting it by hand
       // produces a boundary-less header and the server rejects the request.
-      headers: { "app-id": BUZZEBEES_APP_ID },
+      headers: { "app-id": appId() },
       body: form,
       cache: "no-store",
     });
