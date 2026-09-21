@@ -91,6 +91,39 @@ Two things to know before deploying:
 - Sessions are stateless. Rotating `SESSION_SECRET` signs everyone out, but
   there is no way to revoke a single session before it expires.
 
+## Deploying
+
+The app builds to a Docker image via the root `Dockerfile` — a multi-stage
+build that emits Next.js' `standalone` output, so the runtime image carries
+only the traced dependencies and runs as a non-root user.
+
+```bash
+docker build -t crmplus-edit-member-level .
+docker run --rm -p 3000:3000 \
+  -e SESSION_SECRET="$(openssl rand -base64 48)" \
+  -e AUTH_USERS='somchai|Somchai J.|scrypt:...' \
+  crmplus-edit-member-level
+```
+
+The server reads `PORT` and `HOSTNAME` at startup; the image defaults to
+`0.0.0.0:3000` and a platform that injects `PORT` overrides it.
+
+### Railway
+
+`railway.json` pins the Dockerfile builder and points the healthcheck at
+`/api/health`. Connect the repository and set two service variables:
+
+| Variable | |
+| --- | --- |
+| `SESSION_SECRET` | Random, 32+ characters |
+| `AUTH_USERS` | Operator entries — see [Authentication](#authentication) |
+
+Neither is needed at build time: every route that reads them is rendered on
+demand, so the image itself holds no secrets.
+
+`/api/health` is unauthenticated and returns 503 listing any missing variable,
+so a misconfigured deploy fails its healthcheck instead of coming up broken.
+
 ## Buzzebees integration
 
 Server-side only — `src/lib/buzzebees/` is marked `server-only`, so no

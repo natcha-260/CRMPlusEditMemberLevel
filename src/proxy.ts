@@ -3,7 +3,21 @@ import type { NextRequest } from "next/server";
 
 import { SESSION_COOKIE, decryptSession } from "@/lib/auth/session-token";
 
-const PUBLIC_PATHS = ["/login"];
+/** Reachable without a session. */
+const PUBLIC_PATHS = ["/login", "/api/health"];
+
+/**
+ * Public paths that a signed-in user should be bounced away from. `/api/health`
+ * is deliberately not one: a platform probe must get the same answer whether or
+ * not it happens to carry a cookie.
+ */
+const AUTH_PATHS = ["/login"];
+
+function matches(pathname: string, paths: readonly string[]): boolean {
+  return paths.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}
 
 /**
  * Routes requests based on whether the session cookie carries a valid
@@ -20,11 +34,8 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = await decryptSession(token);
-  const isPublic = PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
 
-  if (!session && !isPublic) {
+  if (!session && !matches(pathname, PUBLIC_PATHS)) {
     const loginUrl = new URL("/login", request.url);
     if (pathname !== "/") loginUrl.searchParams.set("next", `${pathname}${search}`);
 
@@ -34,7 +45,7 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  if (session && isPublic) {
+  if (session && matches(pathname, AUTH_PATHS)) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
