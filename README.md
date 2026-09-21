@@ -91,15 +91,50 @@ Two things to know before deploying:
 - Sessions are stateless. Rotating `SESSION_SECRET` signs everyone out, but
   there is no way to revoke a single session before it expires.
 
+## Buzzebees integration
+
+Server-side only — `src/lib/buzzebees/` is marked `server-only`, so no
+credential or token reaches the browser.
+
+| Module | Purpose |
+| --- | --- |
+| `config.ts` | Base URLs, `app-id`, merchant credentials |
+| `auth.ts` | `POST /merchant/login` (multipart), token cache, single-flight |
+| `client.ts` | Authorized fetch, retries once on 401 with a fresh token |
+| `profile.ts` | `GET /pos/profile?contactNumber=…` |
+
+The token is sent as `Authorization: token <access_token>` — the scheme is the
+literal word `token`, not `Bearer`.
+
+> **Credentials are hardcoded** in `src/lib/buzzebees/config.ts` by request.
+> They are visible to anyone with repository access and remain in git history
+> after removal, so rotate them if that ever stops being acceptable. Moving
+> them to `process.env.*` is a change to that one file; nothing else depends
+> on how they are sourced.
+
+### Verifying the connection
+
+The endpoints are unreachable from some networks, so there is a diagnostic
+route. Sign in first — it requires an app session and never returns the token.
+
+```bash
+# login only
+curl -b cookies.txt http://localhost:3000/api/buzzebees/health
+
+# login + customer lookup
+curl -b cookies.txt 'http://localhost:3000/api/buzzebees/health?contactNumber=0901614282'
+```
+
 ## Member data
 
-`src/lib/members/store.ts` is a **placeholder in-memory data source** with
-three fictional sample members. The real Buzzebees CRM API is not wired up
-yet; `src/lib/members/service.ts` is the interface the UI depends on and the
-single place to swap in the live integration. State resets when the server
-restarts.
+`src/lib/members/store.ts` is still a **placeholder in-memory data source**
+with three fictional sample members, and it is what the UI reads today.
+Wiring the UI to `/pos/profile` needs the live response field names, which
+the diagnostic route above reports. `src/lib/members/service.ts` is the
+interface to map them onto.
 
-Sample numbers to try: `0900000001`, `0900000002`, `0900000003`.
+Sample numbers for the placeholder store: `0900000001`, `0900000002`,
+`0900000003`.
 
 ## Scripts
 
@@ -123,6 +158,7 @@ src/
   components/       # UI: tabs, member card, history, modals
   lib/
     auth/           # Sessions, user store, rate limiting, access checks
+    buzzebees/      # Buzzebees API: credentials, merchant login, profile
     members/        # Domain types, levels, data source
   proxy.ts          # Route gate (Next.js 16's renamed middleware)
 ```
